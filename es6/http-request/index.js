@@ -150,8 +150,8 @@ export default class HttpRequest {
    * Get the active host index
    * @returns {Number} The active host index
    */
-  getActiveHostIndex () {
-    return this.activeHostIndex
+  getActiveHostIndex (useLeader) {
+    return useLeader ? 0 : this.activeHostIndex
   }
 
   /**
@@ -248,14 +248,16 @@ export default class HttpRequest {
       stream = false,
       timeout = DEAULT_TIMEOUT,
       useLeader = false,
+      numHostRetriesRemaining = this.hosts.length - 1
     } = options
     // Honor the supplied activeHostIndex or get the active host
-    const { activeHostIndex = this.getActiveHost(useLeader) } = options
+    const { activeHostIndex = this.getActiveHostIndex(useLeader) } = options
+    const activeHost = this.hosts[activeHostIndex]
     let { uri } = options
     if (!uri) {
       throw new Error('The uri option is required')
     }
-    uri = this.uriIsAbsolute(uri) ? uri : `${activeHostIndex}/${cleanPath(uri)}`
+    uri = this.uriIsAbsolute(uri) ? uri : `${activeHost}/${cleanPath(uri)}`
     // If a stream is request use the request library directly
     if (stream) {
       return r({
@@ -302,7 +304,21 @@ export default class HttpRequest {
       },
       uri,
     }
-    return rp(requestPromiseOptions)
+    try {
+      return await rp(requestPromiseOptions)
+    } catch(e) {
+      if(e.error && (e.error.errno == 'ECONNREFUSED' || e.error.errno == 'ENOTFOUND') && numHostRetriesRemaining > 0) {
+        console.log(`Connection to ${activeHost} failed: ${e.error.errno}; trying next host`);
+        return await this.fetch({
+          ...options,
+          useLeader: false,
+          activeHostIndex: (activeHostIndex + 1) % this.hosts.length,
+          numHostRetriesRemaining: numHostRetriesRemaining - 1,
+        });
+      }
+      console.error(e);
+      throw e;
+    }
   }
 
   /**

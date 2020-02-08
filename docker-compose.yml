@@ -28,15 +28,11 @@ services:
     build:
       context: ./docker/rqlite-replicate-0
       dockerfile: Dockerfile
-    depends_on:
-      - rqlite-master
     healthcheck:
       test: ["CMD", "curl", "http://rqlite-replicate-0:4001/status"]
   rqlite-replicate-1:
     build:
       context: ./docker/rqlite-replicate-1
       dockerfile: Dockerfile
-    depends_on:
-      - rqlite-master
     healthcheck:
       test: ["CMD", "curl", "http://rqlite-replicate-1:4001/status"]

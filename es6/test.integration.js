@@ -4,6 +4,7 @@ import { PATH_LOAD, PATH_BACKUP } from './api/backup'
 import { PATH_STATUS } from './api/status'
 // eslint-disable-next-line import/named
 import { DataApiClient, BackupApiClient, StatusApiClient } from '.'
+import { connect } from 'net';
 
 /**
  * The RQLite host for integration tests, which can be changed
@@ -13,28 +14,28 @@ import { DataApiClient, BackupApiClient, StatusApiClient } from '.'
  */
 const HOST = process.env.RQLITE_HOSTS || 'http://localhost:4001'
 
-describe('api status client', () => {
-  const statusApiClient = new StatusApiClient(HOST)
-  /**
-   * Before beginning test check the status endpoint for a response from
-   * RQLite server
-   * @param {Number} attempt The current attempt
-   * @param {Number} wait The amount of time to wait
-   * @param {Number} maxAttempts The maximum number of attempts before
-   * throw the current error
-   */
-  async function checkRqliteServerReady (attempt = 0, wait = 500, maxAttempts = 10) {
-    try {
-      return await statusApiClient.statusAllHosts()
-    } catch (e) {
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, wait))
-        return checkRqliteServerReady(attempt + 1)
-      }
-      throw e
+const statusApiClient = new StatusApiClient(HOST)
+/**
+ * Before beginning test check the status endpoint for a response from
+ * RQLite server
+ * @param {Number} attempt The current attempt
+ * @param {Number} wait The amount of time to wait
+ * @param {Number} maxAttempts The maximum number of attempts before
+ * throw the current error
+ */
+async function checkRqliteServerReady (attempt = 0, wait = 500, maxAttempts = 10) {
+  try {
+    return await statusApiClient.statusAllHosts()
+  } catch (e) {
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, wait))
+      return checkRqliteServerReady(attempt + 1)
     }
+    throw e
   }
+}
 
+describe('api status client', () => {
   before(() => checkRqliteServerReady())
   describe('should get status response', () => {
     it(`should call ${HOST}${PATH_STATUS} and create table named foo`, async () => {
@@ -163,6 +164,17 @@ describe('api data client', () => {
       assert.equal(dataResult.getRowsAffected(), 1, 'row_affected')
     })
   })
+  describe('when first node is down', () => {
+    before(async () => await dockerComposeCommand('stop rqlite-master'));
+    after(async () => {
+      await dockerComposeCommand('start rqlite-master');
+      await checkRqliteServerReady();
+    });
+    it(`should still work`, async () => {
+      const dataResults = await dataApiClient.query("SELECT 1 as foo")
+      assert.deepEqual(dataResults.results[0].data, { foo: 1 }, 'result')
+    })
+  })
 })
 
 describe('api backups client', () => {
@@ -204,6 +216,7 @@ describe('api backups client', () => {
       assert.isString(stream.toString())
     })
   })
+  if(false)
   describe('restore database', () => {
     it(`should call ${HOST}${PATH_LOAD} and send a SQLite backup stream`, async () => {
       /**
@@ -230,3 +243,18 @@ describe('api backups client', () => {
     })
   })
 })
+
+function dockerComposeCommand(cmd) {
+  console.log(`docker-compose ${cmd}`);
+  return new Promise(resolve => {
+    const socket = connect({ host: 'compose-proxy', port: 1111 });
+    socket.setEncoding('utf-8');
+    socket.on('connect', () => socket.write(cmd + '\n'));
+    let result = '';
+    socket.on('data', chunk => result += chunk);
+    socket.on('end', () => {
+      console.log(`Proxy returned: ${result}`);
+      resolve(result);
+    });
+  });
+}

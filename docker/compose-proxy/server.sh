@@ -1,13 +1,13 @@
 #!/bin/sh
 
 read cmd service
-echo "Command: $cmd"
-echo "Service: $service"
 case "$cmd" in
   start)
-    docker-compose -p rqlitejs start "$service"
+    echo "Starting: $service"
+    docker-compose -p rqlitejs start "$service" && echo "OK"
     ;;
   stop)
-    docker-compose -p rqlitejs stop "$service"
+    echo "Stopping: $service"
+    docker-compose -p rqlitejs stop "$service" && echo "OK"
     ;;
 esac

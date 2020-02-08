@@ -11,10 +11,11 @@ services:
   test:
     build: .
     environment: 
-      RQLITE_HOSTS: http://rqlite-master:4001,http://rqlite-replicate-0,http://rqlite-replicate-1:4001
+      RQLITE_HOSTS: 'http://rqlite-master:4001,http://rqlite-replicate-0:4001,http://rqlite-replicate-1:4001'
     volumes:
       - ./es6:/test/es6
     depends_on:
+      - compose-proxy
       - rqlite-master
       - rqlite-replicate-0
       - rqlite-replicate-1

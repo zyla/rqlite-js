@@ -308,11 +308,12 @@ export default class HttpRequest {
       return await rp(requestPromiseOptions)
     } catch(e) {
       if(e.error && (e.error.errno == 'ECONNREFUSED' || e.error.errno == 'ENOTFOUND') && numHostRetriesRemaining > 0) {
-        console.log(`Connection to ${activeHost} failed: ${e.error.errno}; trying next host`);
+        const nextIndex = (activeHostIndex + 1) % this.hosts.length;
+        this.setActiveHostIndex(nextIndex);
+        console.log(`Connection to ${activeHost} failed: ${e.error.errno}; trying next host (${this.hosts[nextIndex]})`);
         return await this.fetch({
           ...options,
           useLeader: false,
-          activeHostIndex: (activeHostIndex + 1) % this.hosts.length,
           numHostRetriesRemaining: numHostRetriesRemaining - 1,
         });
       }
